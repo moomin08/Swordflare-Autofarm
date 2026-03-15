@@ -130,7 +130,14 @@ spawn(function()
     end
 end)
 
--- Main Farm Loop (Boss Fix)
+-- Super Robust Name Matching for Bosses
+local function nameMatches(a, b)
+    local cleanA = a:gsub("%s*%b()", ""):gsub("%s+", ""):lower()
+    local cleanB = b:gsub("%s*%b()", ""):gsub("%s+", ""):lower()
+    return cleanA:find(cleanB) or cleanB:find(cleanA)
+end
+
+-- Main Farm Loop
 spawn(function()
     while true do
         task.wait()
@@ -151,13 +158,12 @@ spawn(function()
 
         for _, enemy in pairs(enemies:GetChildren()) do
             if not getgenv().FarmEnabled then break end
-            
-            -- FLEXIBLE NAME MATCH (fixes all boss spacing issues)
-            local enemyName = enemy.Name
-            local isSelected = getgenv().SelectedMobs[enemyName]
+
+            -- Check if selected (with boss name fix)
+            local isSelected = getgenv().SelectedMobs[enemy.Name]
             if not isSelected then
                 for sel in pairs(getgenv().SelectedMobs) do
-                    if enemyName:find(sel:gsub(" %(", "(")) or sel:find(enemyName) then
+                    if nameMatches(enemy.Name, sel) then
                         isSelected = true
                         break
                     end
@@ -165,7 +171,7 @@ spawn(function()
             end
             if not isSelected then continue end
 
-            -- ROBUST HITBOX (fixes bosses that don't have "Hitbox")
+            -- Robust Hitbox (for bosses)
             local hitbox = enemy:FindFirstChild("Hitbox") 
                          or enemy:FindFirstChild("HumanoidRootPart") 
                          or enemy.PrimaryPart 
@@ -191,4 +197,4 @@ spawn(function()
     end
 end)
 
-print("✅ Swordflare Farm LOADED WITH BOSS FIX!")
+print("✅ Swordflare Farm LOADED - Bosses now work perfectly!")
