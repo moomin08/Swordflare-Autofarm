@@ -61,19 +61,47 @@ FarmTab:CreateSlider({
     Callback = function(v) getgenv().OffsetDistance = v end
 })
 
--- ==================== MOVEMENT ====================
+-- ==================== MOVEMENT HACKS ====================
 MovementTab:CreateSection("Movement Hacks")
 
 local SpeedEnabled, SpeedValue = false, 16
-MovementTab:CreateToggle({Name="Speed Hack", CurrentValue=false, Callback=function(v) SpeedEnabled=v end})
-MovementTab:CreateSlider({Name="WalkSpeed", Range={1,100}, CurrentValue=16, Callback=function(v) SpeedValue=v end})
+MovementTab:CreateToggle({Name="Speed Hack", CurrentValue=false, Callback=function(v) SpeedEnabled = v end})
+MovementTab:CreateSlider({Name="WalkSpeed", Range={1,100}, CurrentValue=16, Callback=function(v) SpeedValue = v end})
 
 local FlyEnabled, FlySpeed = false, 50
-MovementTab:CreateToggle({Name="Fly", CurrentValue=false, Callback=function(v) FlyEnabled=v end})
-MovementTab:CreateSlider({Name="Fly Speed", Range={10,100}, CurrentValue=50, Callback=function(v) FlySpeed=v end})
+MovementTab:CreateToggle({Name="Fly", CurrentValue=false, Callback=function(v) FlyEnabled = v end})
+MovementTab:CreateSlider({Name="Fly Speed", Range={10,100}, CurrentValue=50, Callback=function(v) FlySpeed = v end})
 
 local InfJumpEnabled = false
-MovementTab:CreateToggle({Name="Infinite Jump", CurrentValue=false, Callback=function(v) InfJumpEnabled=v end})
+MovementTab:CreateToggle({Name="Infinite Jump", CurrentValue=false, Callback=function(v) InfJumpEnabled = v end})
+
+-- ==================== GUI CONTROLS (New) ====================
+MovementTab:CreateSection("GUI Controls")
+
+local function toggleGUI()
+    Rayfield:SetVisibility(not Rayfield:IsVisible())
+end
+
+MovementTab:CreateButton({
+    Name = "Toggle GUI (RightShift Key)",
+    Callback = toggleGUI
+})
+
+MovementTab:CreateButton({
+    Name = "Destroy GUI (Permanent - re-execute to get back)",
+    Callback = function()
+        Rayfield:Destroy()
+        print("GUI has been destroyed.")
+    end
+})
+
+-- RightShift hotkey to toggle GUI
+game:GetService("UserInputService").InputBegan:Connect(function(input, processed)
+    if processed then return end
+    if input.KeyCode == Enum.KeyCode.RightShift then
+        toggleGUI()
+    end
+end)
 
 Rayfield:LoadConfiguration()
 
@@ -94,7 +122,7 @@ spawn(function()
     end
 end)
 
--- Inf Jump
+-- Infinite Jump
 UIS.JumpRequest:Connect(function()
     if InfJumpEnabled then
         local hum = player.Character and player.Character:FindFirstChild("Humanoid")
@@ -109,8 +137,8 @@ spawn(function()
         local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
         if not root then continue end
         if FlyEnabled then
-            bv = bv or Instance.new("BodyVelocity",root) bv.MaxForce = Vector3.new(1e9,1e9,1e9)
-            bg = bg or Instance.new("BodyGyro",root) bg.MaxTorque = Vector3.new(1e9,1e9,1e9) bg.P = 20000
+            bv = bv or Instance.new("BodyVelocity", root) bv.MaxForce = Vector3.new(1e9,1e9,1e9)
+            bg = bg or Instance.new("BodyGyro", root) bg.MaxTorque = Vector3.new(1e9,1e9,1e9) bg.P = 20000
             
             local cam = workspace.CurrentCamera
             local move = Vector3.new()
@@ -130,14 +158,13 @@ spawn(function()
     end
 end)
 
--- Super Robust Name Matching for Bosses
+-- Super Robust Name Matching + Hitbox for Bosses
 local function nameMatches(a, b)
     local cleanA = a:gsub("%s*%b()", ""):gsub("%s+", ""):lower()
     local cleanB = b:gsub("%s*%b()", ""):gsub("%s+", ""):lower()
     return cleanA:find(cleanB) or cleanB:find(cleanA)
 end
 
--- Main Farm Loop
 spawn(function()
     while true do
         task.wait()
@@ -159,7 +186,6 @@ spawn(function()
         for _, enemy in pairs(enemies:GetChildren()) do
             if not getgenv().FarmEnabled then break end
 
-            -- Check if selected (with boss name fix)
             local isSelected = getgenv().SelectedMobs[enemy.Name]
             if not isSelected then
                 for sel in pairs(getgenv().SelectedMobs) do
@@ -171,7 +197,6 @@ spawn(function()
             end
             if not isSelected then continue end
 
-            -- Robust Hitbox (for bosses)
             local hitbox = enemy:FindFirstChild("Hitbox") 
                          or enemy:FindFirstChild("HumanoidRootPart") 
                          or enemy.PrimaryPart 
@@ -197,4 +222,6 @@ spawn(function()
     end
 end)
 
-print("✅ Swordflare Farm LOADED - Bosses now work perfectly!")
+print("✅ Swordflare Farm FULLY LOADED! (Bosses fixed + GUI toggle added)")
+print("   • Press RightShift anytime to hide/show GUI")
+print("   • Use 'Destroy GUI' button to remove it permanently")
