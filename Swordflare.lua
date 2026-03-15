@@ -1,4 +1,3 @@
-
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
@@ -11,6 +10,7 @@ local Window = Rayfield:CreateWindow({
 
 local FarmTab = Window:CreateTab("Farm", 4483362458)
 local MovementTab = Window:CreateTab("Movement", 6031094678)
+local ServerTab = Window:CreateTab("Server", 6031094678)
 
 -- ==================== FARM SETTINGS ====================
 FarmTab:CreateSection("Auto Farm Controls")
@@ -30,7 +30,7 @@ local mobOptions = {
 }
 
 local MobDropdown = FarmTab:CreateDropdown({
-    Name = "Select Mobs to Farm",
+    Name = "Select Mobs to Farm (Multiple Allowed)",
     Options = mobOptions,
     MultiSelect = true,
     Callback = function(opts)
@@ -39,7 +39,7 @@ local MobDropdown = FarmTab:CreateDropdown({
     end
 })
 
-FarmTab:CreateButton({Name = "Select All", Callback = function() MobDropdown:Set(mobOptions) end})
+FarmTab:CreateButton({Name = "Select All Mobs", Callback = function() MobDropdown:Set(mobOptions) end})
 FarmTab:CreateButton({Name = "Clear Selection", Callback = function() MobDropdown:Set({}); getgenv().SelectedMobs = {} end})
 
 -- ==================== POSITION CONTROL ====================
@@ -88,6 +88,61 @@ MovementTab:CreateButton({
 })
 
 Rayfield:LoadConfiguration()
+
+-- ==================== SERVER HOPPING (NEW TAB) ====================
+ServerTab:CreateSection("Server Hopping")
+
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
+local placeId = game.PlaceId
+
+-- Rejoin Current Server
+ServerTab:CreateButton({
+    Name = "Rejoin Current Server",
+    Callback = function()
+        TeleportService:TeleportToPlaceInstance(placeId, game.JobId)
+    end
+})
+
+-- Hop to Random New Server
+ServerTab:CreateButton({
+    Name = "Hop to Random Server",
+    Callback = function()
+        TeleportService:Teleport(placeId)
+        print("Hopping to a random server...")
+    end
+})
+
+-- Hop to Low Player Server (<10 players preferred)
+ServerTab:CreateButton({
+    Name = "Hop to Low Player Server",
+    Callback = function()
+        local servers = {}
+        local success, response = pcall(function()
+            local url = "https://games.roblox.com/v1/games/" .. placeId .. "/servers/Public?limit=100&sortOrder=Asc"
+            return HttpService:GetAsync(url)
+        end)
+
+        if success then
+            local data = HttpService:JSONDecode(response)
+            for _, server in ipairs(data.data or {}) do
+                if server.id ~= game.JobId and server.playing and server.playing < 10 and server.playing > 0 then
+                    table.insert(servers, server)
+                end
+            end
+        end
+
+        if #servers > 0 then
+            table.sort(servers, function(a, b) return a.playing < b.playing end)
+            local target = servers[1]
+            TeleportService:TeleportToPlaceInstance(placeId, target.id)
+            print("Hopping to low player server (" .. target.playing .. " players)")
+        else
+            print("No low-player servers found → Hopping randomly instead")
+            TeleportService:Teleport(placeId)
+        end
+    end
+})
 
 -- ==================== CORE + LOOPS ====================
 getgenv().FarmEnabled = false
@@ -142,7 +197,7 @@ spawn(function()
     end
 end)
 
--- Robust matching (ignores extra spaces, case, suffixes like (Boss))
+-- Robust name matching for bosses
 local function nameMatches(selected, actual)
     local cleanSel = selected:gsub("%s+", ""):lower()
     local cleanAct = actual:gsub("%s+", ""):lower()
@@ -208,5 +263,6 @@ spawn(function()
 end)
 
 print("✅ Swordflare Farm LOADED")
-print("   • Press K to toggle GUI visibility (Rayfield default)")
-print("   • Use 'Destroy GUI' button in Movement tab if needed")
+print("   • Multiple mobs fully supported (hold Ctrl/Cmd to select many)")
+print("   • Press K to toggle GUI (Rayfield default)")
+print("   • New 'Server' tab for Rejoin / Hop / Low Player Hop")
