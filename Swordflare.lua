@@ -37,7 +37,7 @@ local SelectedLabel = FarmTab:CreateParagraph({
 })
 
 local MobDropdown = FarmTab:CreateDropdown({
-    Name = "Select Mobs to Farm (hold Ctrl / Cmd to multi-select)",
+    Name = "Select Mobs to Farm",
     Options = mobOptions,
     MultiSelect = true,
     CurrentOption = {},
