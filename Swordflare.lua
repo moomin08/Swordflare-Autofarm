@@ -1,4 +1,4 @@
--- Swordflare Selective Auto-Farm (Stacked Selected Mobs Visual + Server Hop)
+
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
@@ -30,31 +30,46 @@ local mobOptions = {
     "Veiled Singularity"
 }
 
--- Visual stacked list of selected mobs
+-- Visual stacked list – one mob name per line
 local SelectedLabel = FarmTab:CreateParagraph({
     Title = "Currently Selected Mobs",
     Content = "None selected yet"
 })
 
 local MobDropdown = FarmTab:CreateDropdown({
-    Name = "Select Mobs to Farm (Multiple Allowed)",
+    Name = "Select Mobs to Farm (hold Ctrl / Cmd to multi-select)",
     Options = mobOptions,
     MultiSelect = true,
-    Callback = function(opts)
+    CurrentOption = {},
+    Callback = function(selectedOptions)
         getgenv().SelectedMobs = {}
-        for _, v in opts do getgenv().SelectedMobs[v] = true end
-
-        -- Update visual stack
-        if #opts == 0 then
-            SelectedLabel:Set("None selected yet")
+        
+        local lines = {}
+        
+        if typeof(selectedOptions) == "table" then
+            for _, mobName in ipairs(selectedOptions) do
+                getgenv().SelectedMobs[mobName] = true
+                table.insert(lines, mobName)
+            end
+            
+            if #lines == 0 then
+                SelectedLabel:Set("None selected yet")
+            else
+                -- One mob per line (stacked vertically)
+                SelectedLabel:Set(table.concat(lines, "\n"))
+            end
         else
-            SelectedLabel:Set(table.concat(opts, ", "))
+            SelectedLabel:Set("Error – please re-select mobs")
         end
     end
 })
 
 FarmTab:CreateButton({Name = "Select All Mobs", Callback = function() MobDropdown:Set(mobOptions) end})
-FarmTab:CreateButton({Name = "Clear Selection", Callback = function() MobDropdown:Set({}); getgenv().SelectedMobs = {} end})
+FarmTab:CreateButton({Name = "Clear Selection", Callback = function() 
+    MobDropdown:Set({}) 
+    getgenv().SelectedMobs = {} 
+    SelectedLabel:Set("None selected yet") 
+end})
 
 -- ==================== POSITION CONTROL ====================
 FarmTab:CreateSection("Position Settings")
@@ -108,8 +123,20 @@ local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
 local placeId = game.PlaceId
 
-ServerTab:CreateButton({Name = "Rejoin Current Server", Callback = function() TeleportService:TeleportToPlaceInstance(placeId, game.JobId) end})
-ServerTab:CreateButton({Name = "Hop to Random Server", Callback = function() TeleportService:Teleport(placeId) end})
+ServerTab:CreateButton({
+    Name = "Rejoin Current Server",
+    Callback = function()
+        TeleportService:TeleportToPlaceInstance(placeId, game.JobId)
+    end
+})
+
+ServerTab:CreateButton({
+    Name = "Hop to Random Server",
+    Callback = function()
+        TeleportService:Teleport(placeId)
+        print("Hopping to a random server...")
+    end
+})
 
 ServerTab:CreateButton({
     Name = "Hop to Low Player Server (<10 players)",
@@ -133,7 +160,7 @@ ServerTab:CreateButton({
             TeleportService:TeleportToPlaceInstance(placeId, servers[1].id)
             print("Hopping to low player server (" .. servers[1].playing .. " players)")
         else
-            print("No low-player servers → Hopping randomly")
+            print("No low-player servers found → Hopping randomly instead")
             TeleportService:Teleport(placeId)
         end
     end
@@ -141,7 +168,7 @@ ServerTab:CreateButton({
 
 Rayfield:LoadConfiguration()
 
--- ==================== CORE + LOOPS ====================
+-- ==================== CORE VARIABLES & LOOPS ====================
 getgenv().FarmEnabled = false
 getgenv().SelectedMobs = {}
 getgenv().OffsetDistance = 5
@@ -150,7 +177,7 @@ local player = game.Players.LocalPlayer
 local UIS = game:GetService("UserInputService")
 local enemies = workspace:WaitForChild("Enemies")
 
--- Speed, Fly, Inf Jump, Farm Loop (unchanged from before)
+-- Speed Handler
 spawn(function()
     while task.wait(0.1) do
         local hum = player.Character and player.Character:FindFirstChild("Humanoid")
@@ -158,6 +185,7 @@ spawn(function()
     end
 end)
 
+-- Infinite Jump
 UIS.JumpRequest:Connect(function()
     if InfJumpEnabled then
         local hum = player.Character and player.Character:FindFirstChild("Humanoid")
@@ -165,14 +193,17 @@ UIS.JumpRequest:Connect(function()
     end
 end)
 
+-- Fly Handler
 local bv, bg
 spawn(function()
     while true do task.wait()
         local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
         if not root then continue end
+        
         if FlyEnabled then
             bv = bv or Instance.new("BodyVelocity", root) bv.MaxForce = Vector3.new(1e9,1e9,1e9)
             bg = bg or Instance.new("BodyGyro", root) bg.MaxTorque = Vector3.new(1e9,1e9,1e9) bg.P = 20000
+            
             local cam = workspace.CurrentCamera
             local move = Vector3.new()
             if UIS:IsKeyDown(Enum.KeyCode.W) then move += cam.CFrame.LookVector end
@@ -181,6 +212,7 @@ spawn(function()
             if UIS:IsKeyDown(Enum.KeyCode.D) then move += cam.CFrame.RightVector end
             if UIS:IsKeyDown(Enum.KeyCode.Space) then move += Vector3.new(0,1,0) end
             if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then move -= Vector3.new(0,1,0) end
+            
             bv.Velocity = move.Magnitude > 0 and (move.Unit * FlySpeed * 10) or Vector3.new()
             bg.CFrame = cam.CFrame
         else
@@ -190,12 +222,14 @@ spawn(function()
     end
 end)
 
+-- Robust name matching (handles minor variations)
 local function nameMatches(selected, actual)
     local cleanSel = selected:gsub("%s+", ""):lower()
     local cleanAct = actual:gsub("%s+", ""):lower()
     return cleanAct:find(cleanSel) or cleanSel:find(cleanAct)
 end
 
+-- Main Farm Loop
 spawn(function()
     while true do
         task.wait()
@@ -228,16 +262,24 @@ spawn(function()
             end
             if not isSelected then continue end
 
-            local hitbox = enemy:FindFirstChild("Hitbox") or enemy:FindFirstChild("HumanoidRootPart") or enemy.PrimaryPart or enemy:FindFirstChildWhichIsA("BasePart")
+            local hitbox = enemy:FindFirstChild("Hitbox") 
+                         or enemy:FindFirstChild("HumanoidRootPart") 
+                         or enemy.PrimaryPart 
+                         or enemy:FindFirstChildWhichIsA("BasePart")
+            
             local hum = enemy:FindFirstChildOfClass("Humanoid")
             if not hitbox or not hum or hum.Health <= 0 then continue end
 
             local mode = getgenv().PositionMode
             local offset = getgenv().OffsetDistance
-            local cf = hitbox.CFrame * (mode == "Behind" and CFrame.new(0,4,-offset) or mode == "Above" and CFrame.new(0,offset+3,0) or CFrame.new(0,-offset,0))
+            local cf = hitbox.CFrame * (mode == "Behind" and CFrame.new(0,4,-offset)
+                                    or mode == "Above" and CFrame.new(0,offset+3,0)
+                                    or CFrame.new(0,-offset,0))
 
             root.CFrame = cf
-            if mode == "Behind" then root.CFrame = CFrame.lookAt(root.Position, hitbox.Position) end
+            if mode == "Behind" then
+                root.CFrame = CFrame.lookAt(root.Position, hitbox.Position)
+            end
 
             click:FireServer() click:FireServer() click:FireServer()
             task.wait(0.1)
@@ -245,4 +287,6 @@ spawn(function()
     end
 end)
 
-print("✅ Swordflare Farm LOADED with Stacked Selected Mobs Visual!")
+print("✅ Swordflare Farm LOADED")
+print("   • Selected mobs now shown stacked (one per line) below dropdown")
+print("   • Press K to toggle GUI visibility (Rayfield default)")
