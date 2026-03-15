@@ -3,7 +3,7 @@
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 local Window = Rayfield:CreateWindow({
     Name = "Swordflare Farm",
-    LoadingTitle = "Swordflare Pro Farm",
+    LoadingTitle = "Swordflare Farm",
     LoadingSubtitle = "By Haeser",
     ConfigurationSaving = { Enabled = true, FolderName = "SwordflareConfig", FileName = "Settings" },
     KeySystem = false
