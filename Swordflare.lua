@@ -1,3 +1,4 @@
+
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
@@ -23,9 +24,9 @@ FarmTab:CreateToggle({
 local mobOptions = {
     "Grass Warrior", "Forest Keeper", "Forest Spirit", "Stone Guard",
     "Obsidian Guard", "Fire Spirit", "Crystal Spirit", "Prism Spirit",
-    "Elemental Caster", "Elite Forest Keeper (Boss)", "Obsidian Guardian",
-    "Flame Battlemage (Boss)", "Forest Shade (Boss)", "Crystal Shade (Boss)",
-    "Veiled Singularity (Boss)"
+    "Elemental Caster", "Elite Forest Keeper", "Obsidian Guardian",
+    "Flame Battlemage", "Forest Shade", "Crystal Shade",
+    "Veiled Singularity"
 }
 
 local MobDropdown = FarmTab:CreateDropdown({
@@ -75,33 +76,16 @@ MovementTab:CreateSlider({Name="Fly Speed", Range={10,100}, CurrentValue=50, Cal
 local InfJumpEnabled = false
 MovementTab:CreateToggle({Name="Infinite Jump", CurrentValue=false, Callback=function(v) InfJumpEnabled = v end})
 
--- ==================== GUI CONTROLS (New) ====================
+-- ==================== GUI CONTROLS ====================
 MovementTab:CreateSection("GUI Controls")
 
-local function toggleGUI()
-    Rayfield:SetVisibility(not Rayfield:IsVisible())
-end
-
 MovementTab:CreateButton({
-    Name = "Toggle GUI (RightShift Key)",
-    Callback = toggleGUI
-})
-
-MovementTab:CreateButton({
-    Name = "Destroy GUI (Permanent - re-execute to get back)",
+    Name = "Destroy GUI (Permanent - re-execute script to restore)",
     Callback = function()
         Rayfield:Destroy()
-        print("GUI has been destroyed.")
+        print("GUI destroyed permanently.")
     end
 })
-
--- RightShift hotkey to toggle GUI
-game:GetService("UserInputService").InputBegan:Connect(function(input, processed)
-    if processed then return end
-    if input.KeyCode == Enum.KeyCode.RightShift then
-        toggleGUI()
-    end
-end)
 
 Rayfield:LoadConfiguration()
 
@@ -158,13 +142,14 @@ spawn(function()
     end
 end)
 
--- Super Robust Name Matching + Hitbox for Bosses
-local function nameMatches(a, b)
-    local cleanA = a:gsub("%s*%b()", ""):gsub("%s+", ""):lower()
-    local cleanB = b:gsub("%s*%b()", ""):gsub("%s+", ""):lower()
-    return cleanA:find(cleanB) or cleanB:find(cleanA)
+-- Robust matching (ignores extra spaces, case, suffixes like (Boss))
+local function nameMatches(selected, actual)
+    local cleanSel = selected:gsub("%s+", ""):lower()
+    local cleanAct = actual:gsub("%s+", ""):lower()
+    return cleanAct:find(cleanSel) or cleanSel:find(cleanAct)
 end
 
+-- Main Farm Loop
 spawn(function()
     while true do
         task.wait()
@@ -189,7 +174,7 @@ spawn(function()
             local isSelected = getgenv().SelectedMobs[enemy.Name]
             if not isSelected then
                 for sel in pairs(getgenv().SelectedMobs) do
-                    if nameMatches(enemy.Name, sel) then
+                    if nameMatches(sel, enemy.Name) then
                         isSelected = true
                         break
                     end
@@ -222,6 +207,6 @@ spawn(function()
     end
 end)
 
-print("✅ Swordflare Farm FULLY LOADED! (Bosses fixed + GUI toggle added)")
-print("   • Press RightShift anytime to hide/show GUI")
-print("   • Use 'Destroy GUI' button to remove it permanently")
+print("✅ Swordflare Farm LOADED")
+print("   • Press K to toggle GUI visibility (Rayfield default)")
+print("   • Use 'Destroy GUI' button in Movement tab if needed")
