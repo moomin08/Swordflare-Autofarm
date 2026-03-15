@@ -1,3 +1,4 @@
+-- Swordflare Selective Auto-Farm (Stacked Selected Mobs Visual + Server Hop)
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
@@ -29,6 +30,12 @@ local mobOptions = {
     "Veiled Singularity"
 }
 
+-- Visual stacked list of selected mobs
+local SelectedLabel = FarmTab:CreateParagraph({
+    Title = "Currently Selected Mobs",
+    Content = "None selected yet"
+})
+
 local MobDropdown = FarmTab:CreateDropdown({
     Name = "Select Mobs to Farm (Multiple Allowed)",
     Options = mobOptions,
@@ -36,6 +43,13 @@ local MobDropdown = FarmTab:CreateDropdown({
     Callback = function(opts)
         getgenv().SelectedMobs = {}
         for _, v in opts do getgenv().SelectedMobs[v] = true end
+
+        -- Update visual stack
+        if #opts == 0 then
+            SelectedLabel:Set("None selected yet")
+        else
+            SelectedLabel:Set(table.concat(opts, ", "))
+        end
     end
 })
 
@@ -87,40 +101,22 @@ MovementTab:CreateButton({
     end
 })
 
-Rayfield:LoadConfiguration()
-
--- ==================== SERVER HOPPING (NEW TAB) ====================
+-- ==================== SERVER HOPPING ====================
 ServerTab:CreateSection("Server Hopping")
 
 local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
 local placeId = game.PlaceId
 
--- Rejoin Current Server
-ServerTab:CreateButton({
-    Name = "Rejoin Current Server",
-    Callback = function()
-        TeleportService:TeleportToPlaceInstance(placeId, game.JobId)
-    end
-})
+ServerTab:CreateButton({Name = "Rejoin Current Server", Callback = function() TeleportService:TeleportToPlaceInstance(placeId, game.JobId) end})
+ServerTab:CreateButton({Name = "Hop to Random Server", Callback = function() TeleportService:Teleport(placeId) end})
 
--- Hop to Random New Server
 ServerTab:CreateButton({
-    Name = "Hop to Random Server",
-    Callback = function()
-        TeleportService:Teleport(placeId)
-        print("Hopping to a random server...")
-    end
-})
-
--- Hop to Low Player Server (<10 players preferred)
-ServerTab:CreateButton({
-    Name = "Hop to Low Player Server",
+    Name = "Hop to Low Player Server (<10 players)",
     Callback = function()
         local servers = {}
         local success, response = pcall(function()
-            local url = "https://games.roblox.com/v1/games/" .. placeId .. "/servers/Public?limit=100&sortOrder=Asc"
-            return HttpService:GetAsync(url)
+            return HttpService:GetAsync("https://games.roblox.com/v1/games/" .. placeId .. "/servers/Public?limit=100")
         end)
 
         if success then
@@ -134,15 +130,16 @@ ServerTab:CreateButton({
 
         if #servers > 0 then
             table.sort(servers, function(a, b) return a.playing < b.playing end)
-            local target = servers[1]
-            TeleportService:TeleportToPlaceInstance(placeId, target.id)
-            print("Hopping to low player server (" .. target.playing .. " players)")
+            TeleportService:TeleportToPlaceInstance(placeId, servers[1].id)
+            print("Hopping to low player server (" .. servers[1].playing .. " players)")
         else
-            print("No low-player servers found → Hopping randomly instead")
+            print("No low-player servers → Hopping randomly")
             TeleportService:Teleport(placeId)
         end
     end
 })
+
+Rayfield:LoadConfiguration()
 
 -- ==================== CORE + LOOPS ====================
 getgenv().FarmEnabled = false
@@ -153,7 +150,7 @@ local player = game.Players.LocalPlayer
 local UIS = game:GetService("UserInputService")
 local enemies = workspace:WaitForChild("Enemies")
 
--- Speed
+-- Speed, Fly, Inf Jump, Farm Loop (unchanged from before)
 spawn(function()
     while task.wait(0.1) do
         local hum = player.Character and player.Character:FindFirstChild("Humanoid")
@@ -161,7 +158,6 @@ spawn(function()
     end
 end)
 
--- Infinite Jump
 UIS.JumpRequest:Connect(function()
     if InfJumpEnabled then
         local hum = player.Character and player.Character:FindFirstChild("Humanoid")
@@ -169,7 +165,6 @@ UIS.JumpRequest:Connect(function()
     end
 end)
 
--- Fly
 local bv, bg
 spawn(function()
     while true do task.wait()
@@ -178,7 +173,6 @@ spawn(function()
         if FlyEnabled then
             bv = bv or Instance.new("BodyVelocity", root) bv.MaxForce = Vector3.new(1e9,1e9,1e9)
             bg = bg or Instance.new("BodyGyro", root) bg.MaxTorque = Vector3.new(1e9,1e9,1e9) bg.P = 20000
-            
             local cam = workspace.CurrentCamera
             local move = Vector3.new()
             if UIS:IsKeyDown(Enum.KeyCode.W) then move += cam.CFrame.LookVector end
@@ -187,7 +181,6 @@ spawn(function()
             if UIS:IsKeyDown(Enum.KeyCode.D) then move += cam.CFrame.RightVector end
             if UIS:IsKeyDown(Enum.KeyCode.Space) then move += Vector3.new(0,1,0) end
             if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then move -= Vector3.new(0,1,0) end
-            
             bv.Velocity = move.Magnitude > 0 and (move.Unit * FlySpeed * 10) or Vector3.new()
             bg.CFrame = cam.CFrame
         else
@@ -197,14 +190,12 @@ spawn(function()
     end
 end)
 
--- Robust name matching for bosses
 local function nameMatches(selected, actual)
     local cleanSel = selected:gsub("%s+", ""):lower()
     local cleanAct = actual:gsub("%s+", ""):lower()
     return cleanAct:find(cleanSel) or cleanSel:find(cleanAct)
 end
 
--- Main Farm Loop
 spawn(function()
     while true do
         task.wait()
@@ -237,24 +228,16 @@ spawn(function()
             end
             if not isSelected then continue end
 
-            local hitbox = enemy:FindFirstChild("Hitbox") 
-                         or enemy:FindFirstChild("HumanoidRootPart") 
-                         or enemy.PrimaryPart 
-                         or enemy:FindFirstChildWhichIsA("BasePart")
-            
+            local hitbox = enemy:FindFirstChild("Hitbox") or enemy:FindFirstChild("HumanoidRootPart") or enemy.PrimaryPart or enemy:FindFirstChildWhichIsA("BasePart")
             local hum = enemy:FindFirstChildOfClass("Humanoid")
             if not hitbox or not hum or hum.Health <= 0 then continue end
 
             local mode = getgenv().PositionMode
             local offset = getgenv().OffsetDistance
-            local cf = hitbox.CFrame * (mode == "Behind" and CFrame.new(0,4,-offset)
-                                    or mode == "Above" and CFrame.new(0,offset+3,0)
-                                    or CFrame.new(0,-offset,0))
+            local cf = hitbox.CFrame * (mode == "Behind" and CFrame.new(0,4,-offset) or mode == "Above" and CFrame.new(0,offset+3,0) or CFrame.new(0,-offset,0))
 
             root.CFrame = cf
-            if mode == "Behind" then
-                root.CFrame = CFrame.lookAt(root.Position, hitbox.Position)
-            end
+            if mode == "Behind" then root.CFrame = CFrame.lookAt(root.Position, hitbox.Position) end
 
             click:FireServer() click:FireServer() click:FireServer()
             task.wait(0.1)
@@ -262,7 +245,4 @@ spawn(function()
     end
 end)
 
-print("✅ Swordflare Farm LOADED")
-print("   • Multiple mobs fully supported (hold Ctrl/Cmd to select many)")
-print("   • Press K to toggle GUI (Rayfield default)")
-print("   • New 'Server' tab for Rejoin / Hop / Low Player Hop")
+print("✅ Swordflare Farm LOADED with Stacked Selected Mobs Visual!")
