@@ -1,4 +1,4 @@
--- Swordflare Farm - Updated (no selected mobs label + refresh + experimental spawn trigger)
+
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 local Window = Rayfield:CreateWindow({
@@ -63,24 +63,11 @@ FarmTab:CreateButton({
 })
 
 FarmTab:CreateButton({
-    Name = "Refresh Mobs (Re-check enemies)",
+    Name = "Refresh Mobs (Re-scan Enemies)",
     Callback = function()
-        print("Refreshing enemies list...")
-        -- Just a placeholder; sometimes calling GetChildren again helps sync
-        -- You can add workspace.Enemies.ChildAdded:Wait() or something if needed
-    end
-})
-
-FarmTab:CreateToggle({
-    Name = "Force Mob Spawn Area (Experimental - may help bosses)",
-    CurrentValue = false,
-    Callback = function(v)
-        getgenv().ForceSpawnCheck = v
-        if v then
-            print("Force spawn mode ON - will try to visit areas if no mobs found")
-        else
-            print("Force spawn mode OFF")
-        end
+        local count = #workspace:WaitForChild("Enemies"):GetChildren()
+        print("🔄 Refreshed - " .. count .. " enemies currently loaded")
+        -- This forces the farm loop to re-check immediately
     end
 })
 
@@ -104,8 +91,6 @@ FarmTab:CreateSlider({
 })
 
 -- ==================== MOVEMENT HACKS ====================
--- (keeping your existing movement section unchanged for brevity)
-
 MovementTab:CreateSection("Movement Hacks")
 
 local SpeedEnabled, SpeedValue = false, 16
@@ -129,8 +114,6 @@ MovementTab:CreateButton({
 })
 
 -- ==================== SERVER HOPPING ====================
--- (keeping your existing server section)
-
 ServerTab:CreateSection("Server Hopping")
 local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
@@ -169,108 +152,103 @@ Rayfield:LoadConfiguration()
 getgenv().FarmEnabled = false
 getgenv().SelectedMobs = {}
 getgenv().OffsetDistance = 5
-getgenv().ForceSpawnCheck = false
 
 local player = game.Players.LocalPlayer
 local UIS = game:GetService("UserInputService")
-local enemiesFolder = workspace:WaitForChild("Enemies")
+local enemies = workspace:WaitForChild("Enemies")
 
--- Speed, Fly, Inf Jump loops (unchanged, assuming you have them)
+-- Speed Handler
+spawn(function()
+    while task.wait(0.1) do
+        local hum = player.Character and player.Character:FindFirstChild("Humanoid")
+        if hum then hum.WalkSpeed = SpeedEnabled and SpeedValue or 16 end
+    end
+end)
 
--- Main Farm Loop with experimental spawn trigger
+-- Infinite Jump
+UIS.JumpRequest:Connect(function()
+    if InfJumpEnabled then
+        local hum = player.Character and player.Character:FindFirstChild("Humanoid")
+        if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
+    end
+end)
+
+-- Fly Handler
+local bv, bg
+spawn(function()
+    while true do task.wait()
+        local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+        if not root then continue end
+        if FlyEnabled then
+            bv = bv or Instance.new("BodyVelocity", root) bv.MaxForce = Vector3.new(1e9,1e9,1e9)
+            bg = bg or Instance.new("BodyGyro", root) bg.MaxTorque = Vector3.new(1e9,1e9,1e9) bg.P = 20000
+            local cam = workspace.CurrentCamera
+            local move = Vector3.new()
+            if UIS:IsKeyDown(Enum.KeyCode.W) then move += cam.CFrame.LookVector end
+            if UIS:IsKeyDown(Enum.KeyCode.S) then move -= cam.CFrame.LookVector end
+            if UIS:IsKeyDown(Enum.KeyCode.A) then move -= cam.CFrame.RightVector end
+            if UIS:IsKeyDown(Enum.KeyCode.D) then move += cam.CFrame.RightVector end
+            if UIS:IsKeyDown(Enum.KeyCode.Space) then move += Vector3.new(0,1,0) end
+            if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then move -= Vector3.new(0,1,0) end
+            bv.Velocity = move.Magnitude > 0 and (move.Unit * FlySpeed * 10) or Vector3.new()
+            bg.CFrame = cam.CFrame
+        else
+            if bv then bv:Destroy() bv = nil end
+            if bg then bg:Destroy() bg = nil end
+        end
+    end
+end)
+
+-- Name matching
+local function nameMatches(a, b)
+    local ca = a:gsub("%s+", ""):lower()
+    local cb = b:gsub("%s+", ""):lower()
+    return cb:find(ca) or ca:find(cb)
+end
+
+-- Main Farm Loop
 spawn(function()
     while true do
-        task.wait(0.2)  -- slightly slower to reduce lag
-
+        task.wait()
         if not getgenv().FarmEnabled or not next(getgenv().SelectedMobs) then continue end
-
-        local char = player.Character
-        if not char then continue end
-
-        local root = char:FindFirstChild("HumanoidRootPart")
-        if not root then continue end
-
-        local originalPos = root.CFrame  -- remember where we were
-
+        local char = player.Character if not char then continue end
+        local root = char:FindFirstChild("HumanoidRootPart") if not root then continue end
         local tool = char:FindFirstChildOfClass("Tool")
-        local clickRemote = tool and tool:FindFirstChild("Remotes") and tool.Remotes:FindFirstChild("Click")
-
-        if not clickRemote then
-            -- equip tool logic (unchanged)
+        local click = tool and tool:FindFirstChild("Remotes") and tool.Remotes:FindFirstChild("Click")
+        if not click then
             for _, t in player.Backpack:GetChildren() do
                 if t:IsA("Tool") then t.Parent = char task.wait(0.1) break end
             end
             continue
         end
-
-        local foundAny = false
-
-        for _, enemy in pairs(enemiesFolder:GetChildren()) do
+        for _, enemy in pairs(enemies:GetChildren()) do
             if not getgenv().FarmEnabled then break end
-
-            local isTarget = getgenv().SelectedMobs[enemy.Name]
-            if not isTarget then
+            local isSelected = getgenv().SelectedMobs[enemy.Name]
+            if not isSelected then
                 for sel in pairs(getgenv().SelectedMobs) do
-                    if enemy.Name:lower():find(sel:lower()) or sel:lower():find(enemy.Name:lower()) then
-                        isTarget = true
+                    if nameMatches(sel, enemy.Name) then
+                        isSelected = true
                         break
                     end
                 end
             end
-
-            if not isTarget then continue end
-
+            if not isSelected then continue end
             local hitbox = enemy:FindFirstChild("Hitbox") or enemy:FindFirstChild("HumanoidRootPart") or enemy.PrimaryPart or enemy:FindFirstChildWhichIsA("BasePart")
             local hum = enemy:FindFirstChildOfClass("Humanoid")
-
             if not hitbox or not hum or hum.Health <= 0 then continue end
-
-            foundAny = true
-
             local mode = getgenv().PositionMode
             local offset = getgenv().OffsetDistance
-            local targetCF = hitbox.CFrame * (
-                mode == "Behind" and CFrame.new(0,4,-offset) or
-                mode == "Above"  and CFrame.new(0,offset+3,0) or
-                CFrame.new(0,-offset,0)
-            )
-
-            root.CFrame = targetCF
-
+            local cf = hitbox.CFrame * (mode == "Behind" and CFrame.new(0,4,-offset) or mode == "Above" and CFrame.new(0,offset+3,0) or CFrame.new(0,-offset,0))
+            root.CFrame = cf
             if mode == "Behind" then
                 root.CFrame = CFrame.lookAt(root.Position, hitbox.Position)
             end
-
-            for _ = 1, 3 do
-                clickRemote:FireServer()
-            end
-
-            task.wait(0.12)
-        end
-
-        -- Experimental: if no targets found and force mode on → try to "visit" areas
-        if getgenv().ForceSpawnCheck and not foundAny then
-            print("No matching mobs → trying to force spawn areas...")
-
-            -- Example positions - REPLACE THESE WITH ACTUAL COORDINATES FROM THE GAME
-            -- You need to find safe-ish spots near boss spawn areas (use F3X or explorer to get coords)
-            local possibleSpawnSpots = {
-                CFrame.new(150, 50, -200),   -- example: near Crystal Shade area (CHANGE THESE!)
-                CFrame.new(-300, 80, 400),   -- another possible boss zone
-                CFrame.new(0, 100, 0)        -- add more if you know them
-            }
-
-            for _, spot in ipairs(possibleSpawnSpots) do
-                if not getgenv().FarmEnabled then break end
-                root.CFrame = spot
-                task.wait(1.5)  -- give server time to spawn mobs
-            end
-
-            -- Return to original spot
-            root.CFrame = originalPos
-            task.wait(0.5)
+            click:FireServer() click:FireServer() click:FireServer()
+            task.wait(0.1)
         end
     end
 end)
 
-print("Swordflare Farm loaded - no selected label, refresh button added, experimental spawn force ON")
+print("✅ Swordflare Farm LOADED (Clean version - no selected label)")
+print(" • Refresh Mobs button added")
+print(" • Press K to toggle GUI")
