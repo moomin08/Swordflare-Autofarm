@@ -1,9 +1,7 @@
-
-
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 local Window = Rayfield:CreateWindow({
     Name = "Swordflare Farm",
-    LoadingTitle = "Swordflare Farm",
+    LoadingTitle = "Swordflare Pro Farm",
     LoadingSubtitle = "By Haeser",
     ConfigurationSaving = { Enabled = true, FolderName = "SwordflareConfig", FileName = "Settings" },
     KeySystem = false
@@ -48,26 +46,14 @@ local MobDropdown = FarmTab:CreateDropdown({
     end
 })
 
-FarmTab:CreateButton({
-    Name = "Select All Mobs",
-    Callback = function()
-        MobDropdown:Set(mobOptions)
-    end
-})
-
-FarmTab:CreateButton({
-    Name = "Clear Selection",
-    Callback = function()
-        MobDropdown:Set({})
-    end
-})
+FarmTab:CreateButton({Name = "Select All Mobs", Callback = function() MobDropdown:Set(mobOptions) end})
+FarmTab:CreateButton({Name = "Clear Selection", Callback = function() MobDropdown:Set({}) end})
 
 FarmTab:CreateButton({
     Name = "Refresh Mobs (Re-scan Enemies)",
     Callback = function()
         local count = #workspace:WaitForChild("Enemies"):GetChildren()
         print("🔄 Refreshed - " .. count .. " enemies currently loaded")
-        -- This forces the farm loop to re-check immediately
     end
 })
 
@@ -104,6 +90,15 @@ MovementTab:CreateSlider({Name="Fly Speed", Range={10,100}, CurrentValue=50, Cal
 local InfJumpEnabled = false
 MovementTab:CreateToggle({Name="Infinite Jump", CurrentValue=false, Callback=function(v) InfJumpEnabled = v end})
 
+-- ==================== ANTI-AFK ====================
+MovementTab:CreateSection("Anti-AFK")
+MovementTab:CreateToggle({
+    Name = "Anti-AFK (Prevents Idle Kick)",
+    CurrentValue = true,
+    Callback = function(v) getgenv().AntiAFK = v end
+})
+
+-- ==================== GUI CONTROLS ====================
 MovementTab:CreateSection("GUI Controls")
 MovementTab:CreateButton({
     Name = "Destroy GUI (Permanent - re-execute to restore)",
@@ -152,10 +147,22 @@ Rayfield:LoadConfiguration()
 getgenv().FarmEnabled = false
 getgenv().SelectedMobs = {}
 getgenv().OffsetDistance = 5
+getgenv().AntiAFK = true
 
 local player = game.Players.LocalPlayer
 local UIS = game:GetService("UserInputService")
 local enemies = workspace:WaitForChild("Enemies")
+
+-- Anti-AFK (runs automatically)
+spawn(function()
+    while task.wait(30) do
+        if getgenv().AntiAFK then
+            local vu = game:GetService("VirtualUser")
+            vu:CaptureController()
+            vu:ClickButton2(Vector2.new())
+        end
+    end
+end)
 
 -- Speed Handler
 spawn(function()
@@ -249,6 +256,6 @@ spawn(function()
     end
 end)
 
-print("✅ Swordflare Farm LOADED (Clean version - no selected label)")
-print(" • Refresh Mobs button added")
+print("✅ Swordflare Farm LOADED with Anti-AFK")
+print(" • Anti-AFK is ON by default")
 print(" • Press K to toggle GUI")
